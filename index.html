@@ -3,112 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Моя Удмуртия</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --bg-color: var(--tg-theme-bg-color, #ffffff);
-            --text-color: var(--tg-theme-text-color, #222222);
-            --button-color: var(--tg-theme-button-color, #248bcf);
-            --button-text: var(--tg-theme-button-text-color, #ffffff);
-            --secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f4);
-        }
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: sans-serif;
-            display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;
+            background: var(--tg-theme-bg-color, #fff);
+            color: var(--tg-theme-text-color, #000);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; font-family: sans-serif;
         }
-        .player-card {
-            text-align: center; padding: 40px; border-radius: 35px;
-            background: var(--secondary-bg); width: 260px;
-        }
-        .btn-container { position: relative; width: 120px; height: 120px; margin: 30px auto; }
+        .card { text-align: center; background: var(--tg-theme-secondary-bg-color, #f4f4f4); padding: 40px; border-radius: 35px; width: 250px; }
         #playBtn {
-            position: relative; z-index: 2; width: 100px; height: 100px; border-radius: 50%;
-            border: none; background: var(--button-color); color: var(--button-text);
-            font-size: 16px; font-weight: bold; cursor: pointer;
+            width: 100px; height: 100px; border-radius: 50%; border: none;
+            background: var(--tg-theme-button-color, #248bcf);
+            color: var(--tg-theme-button-text-color, #fff);
+            font-size: 16px; font-weight: bold; cursor: pointer; margin: 20px 0;
+            transition: opacity 0.3s;
         }
-        .pulse {
-            position: absolute; width: 100px; height: 100px; border-radius: 50%;
-            background: var(--button-color); opacity: 0; left: 10px; top: 10px;
-        }
-        .playing .pulse { animation: pulse-animation 2s infinite; }
-        @keyframes pulse-animation {
-            0% { transform: scale(1); opacity: 0.5; }
-            100% { transform: scale(1.7); opacity: 0; }
-        }
-        #statusText { font-size: 12px; font-weight: bold; opacity: 0.6; letter-spacing: 1px; }
+        #status { font-size: 11px; font-weight: bold; opacity: 0.6; height: 20px; }
+        .progress-bar { width: 100%; height: 4px; background: #ddd; margin-top: 10px; border-radius: 2px; overflow: hidden; display: none; }
+        .progress-fill { height: 100%; background: #248bcf; width: 0%; transition: width 0.3s; }
     </style>
 </head>
 <body>
-
-    <div class="player-card">
-        <div id="statusText">НАЖМИТЕ PLAY</div>
-        <div class="btn-container" id="container">
-            <div class="pulse"></div>
-            <button id="playBtn">PLAY</button>
-        </div>
+    <div class="card">
+        <div id="status">ГОТОВ</div>
+        <div class="progress-bar" id="pBar"><div class="progress-fill" id="pFill"></div></div>
+        <button id="playBtn">PLAY</button>
         <div style="font-size: 18px; font-weight: bold;">Моя Удмуртия</div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.ready();
+        tg.expand();
 
         const streamUrl = "https://cors-anywhere.wcx.cloud/http://radio.myudm.ru:10010/efir";
         let audio = new Audio();
         audio.crossOrigin = "anonymous";
 
         const btn = document.getElementById('playBtn');
-        const container = document.getElementById('container');
-        const status = document.getElementById('statusText');
+        const status = document.getElementById('status');
+        const pBar = document.getElementById('pBar');
+        const pFill = document.getElementById('pFill');
+
+        let isBuffering = false;
 
         btn.onclick = function() {
             if (audio.paused) {
-                status.innerText = "БУФЕРИЗАЦИЯ...";
-                btn.disabled = true;
-                btn.style.opacity = "0.5";
-
-                audio.src = streamUrl;
-                audio.load();
-
-                // ХАК: Ждем события canplaythrough (когда браузер считает, что данных хватит для плавного проигрывания)
-                const playOnReady = () => {
-                    audio.play().then(() => {
-                        btn.disabled = false;
-                        btn.style.opacity = "1";
-                        btn.innerText = "STOP";
-                        status.innerText = "• В ЭФИРЕ";
-                        container.classList.add('playing');
-                    });
-                    audio.removeEventListener('canplaythrough', playOnReady);
-                };
-
-                audio.addEventListener('canplaythrough', playOnReady);
-                
-                // Таймаут на случай, если событие не пришло за 10 секунд
-                setTimeout(() => {
-                    if (audio.paused && btn.disabled) {
-                        playOnReady();
-                    }
-                }, 10000);
-
+                startBuffering();
             } else {
-                audio.pause();
-                audio.src = ""; // Полная очистка для сброса буфера
-                btn.innerText = "PLAY";
-                status.innerText = "ПАУЗА";
-                container.classList.remove('playing');
-                btn.disabled = false;
-                btn.style.opacity = "1";
+                stopAudio();
             }
         };
 
-        audio.onerror = () => {
-            status.innerText = "ОШИБКА СЕТИ";
+        function startBuffering() {
+            isBuffering = true;
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            pBar.style.display = "block";
+            status.innerText = "НАПОЛНЕНИЕ БУФЕРА...";
+            
+            audio.src = streamUrl;
+            audio.load();
+
+            // Следим за прогрессом загрузки
+            const checkBuffer = () => {
+                if (audio.buffered.length > 0) {
+                    const bufferedTime = audio.buffered.end(0) - audio.buffered.start(0);
+                    const percent = Math.min((bufferedTime / 8) * 100, 100); // Ждем 8 секунд потока
+                    pFill.style.width = percent + "%";
+
+                    if (bufferedTime >= 6) { // Если накопили 6 секунд - стартуем
+                        audio.play();
+                        onStarted();
+                        audio.removeEventListener('progress', checkBuffer);
+                    }
+                }
+            };
+
+            audio.addEventListener('progress', checkBuffer);
+        }
+
+        function onStarted() {
+            isBuffering = false;
             btn.disabled = false;
             btn.style.opacity = "1";
+            btn.innerText = "STOP";
+            status.innerText = "• В ЭФИРЕ";
+            pBar.style.display = "none";
+            tg.HapticFeedback.impactOccurred('medium');
+        }
+
+        function stopAudio() {
+            audio.pause();
+            audio.src = ""; 
+            btn.innerText = "PLAY";
+            status.innerText = "ПАУЗА";
+            pBar.style.display = "none";
+            pFill.style.width = "0%";
+            tg.HapticFeedback.impactOccurred('light');
+        }
+
+        audio.onerror = () => {
+            status.innerText = "ОШИБКА ПРОКСИ";
+            stopAudio();
         };
     </script>
 </body>
