@@ -9,25 +9,26 @@
             background: var(--tg-theme-bg-color, #fff);
             color: var(--tg-theme-text-color, #000);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0; font-family: sans-serif;
+            height: 100vh; margin: 0; font-family: -apple-system, sans-serif;
         }
-        .card { text-align: center; background: var(--tg-theme-secondary-bg-color, #f4f4f4); padding: 40px; border-radius: 35px; width: 250px; }
+        .card { text-align: center; background: var(--tg-theme-secondary-bg-color, #f5f5f5); padding: 40px; border-radius: 30px; width: 250px; }
         #playBtn {
             width: 100px; height: 100px; border-radius: 50%; border: none;
-            background: var(--tg-theme-button-color, #248bcf);
-            color: var(--tg-theme-button-text-color, #fff);
-            font-size: 16px; font-weight: bold; cursor: pointer; margin: 20px 0;
-            transition: opacity 0.3s;
+            background: #248bcf; color: #fff; font-size: 16px; font-weight: bold;
+            cursor: pointer; margin: 20px 0; outline: none;
         }
-        #status { font-size: 11px; font-weight: bold; opacity: 0.6; height: 20px; }
-        .progress-bar { width: 100%; height: 4px; background: #ddd; margin-top: 10px; border-radius: 2px; overflow: hidden; display: none; }
-        .progress-fill { height: 100%; background: #248bcf; width: 0%; transition: width 0.3s; }
+        #status { font-size: 12px; font-weight: bold; opacity: 0.6; text-transform: uppercase; }
+        .playing { animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(36, 139, 207, 0.4); }
+            70% { box-shadow: 0 0 0 20px rgba(36, 139, 207, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(36, 139, 207, 0); }
+        }
     </style>
 </head>
 <body>
     <div class="card">
         <div id="status">ГОТОВ</div>
-        <div class="progress-bar" id="pBar"><div class="progress-fill" id="pFill"></div></div>
         <button id="playBtn">PLAY</button>
         <div style="font-size: 18px; font-weight: bold;">Моя Удмуртия</div>
     </div>
@@ -36,77 +37,53 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        const streamUrl = "https://cors-anywhere.wcx.cloud/http://radio.myudm.ru:10010/efir";
+        // Ваша ссылка
+        const targetUrl = "http://radio.myudm.ru:10010/efir";
+        
+        // Используем более мощный прокси-сервис для стриминга
+        // Этот прокси лучше справляется с бинарными данными
+        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(targetUrl);
+        
         let audio = new Audio();
         audio.crossOrigin = "anonymous";
 
         const btn = document.getElementById('playBtn');
         const status = document.getElementById('status');
-        const pBar = document.getElementById('pBar');
-        const pFill = document.getElementById('pFill');
-
-        let isBuffering = false;
 
         btn.onclick = function() {
             if (audio.paused) {
-                startBuffering();
+                status.innerText = "ЗАГРУЗКА...";
+                
+                // Переподключаем src, чтобы поток всегда был свежим
+                audio.src = proxyUrl;
+                
+                // Настройка буферизации для мобильных
+                audio.preload = "auto";
+                
+                audio.play()
+                    .then(() => {
+                        status.innerText = "• В ЭФИРЕ";
+                        btn.innerText = "STOP";
+                        btn.classList.add('playing');
+                        tg.HapticFeedback.impactOccurred('medium');
+                    })
+                    .catch(e => {
+                        status.innerText = "ОШИБКА ПРОКСИ";
+                        console.error(e);
+                    });
             } else {
-                stopAudio();
+                audio.pause();
+                audio.src = ""; // Важно: полностью обрываем поток
+                status.innerText = "ПАУЗА";
+                btn.innerText = "PLAY";
+                btn.classList.remove('playing');
+                tg.HapticFeedback.impactOccurred('light');
             }
         };
 
-        function startBuffering() {
-            isBuffering = true;
-            btn.disabled = true;
-            btn.style.opacity = "0.5";
-            pBar.style.display = "block";
-            status.innerText = "НАПОЛНЕНИЕ БУФЕРА...";
-            
-            audio.src = streamUrl;
-            audio.load();
-
-            // Следим за прогрессом загрузки
-            const checkBuffer = () => {
-                if (audio.buffered.length > 0) {
-                    const bufferedTime = audio.buffered.end(0) - audio.buffered.start(0);
-                    const percent = Math.min((bufferedTime / 8) * 100, 100); // Ждем 8 секунд потока
-                    pFill.style.width = percent + "%";
-
-                    if (bufferedTime >= 6) { // Если накопили 6 секунд - стартуем
-                        audio.play();
-                        onStarted();
-                        audio.removeEventListener('progress', checkBuffer);
-                    }
-                }
-            };
-
-            audio.addEventListener('progress', checkBuffer);
-        }
-
-        function onStarted() {
-            isBuffering = false;
-            btn.disabled = false;
-            btn.style.opacity = "1";
-            btn.innerText = "STOP";
-            status.innerText = "• В ЭФИРЕ";
-            pBar.style.display = "none";
-            tg.HapticFeedback.impactOccurred('medium');
-        }
-
-        function stopAudio() {
-            audio.pause();
-            audio.src = ""; 
-            btn.innerText = "PLAY";
-            status.innerText = "ПАУЗА";
-            pBar.style.display = "none";
-            pFill.style.width = "0%";
-            tg.HapticFeedback.impactOccurred('light');
-        }
-
-        audio.onerror = () => {
-            status.innerText = "ОШИБКА ПРОКСИ";
-            stopAudio();
-        };
+        // Если возникают заикания, браузер сам вызовет это событие
+        audio.onwaiting = () => { status.innerText = "БУФЕРИЗАЦИЯ..."; };
+        audio.onplaying = () => { status.innerText = "• В ЭФИРЕ"; };
     </script>
 </body>
 </html>
