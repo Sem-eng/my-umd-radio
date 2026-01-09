@@ -3,98 +3,177 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Радио Моя Удмуртия</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        :root {
+            --primary-color: #0088cc;
+            --bg-color: var(--tg-theme-bg-color, #f5f5f5);
+            --text-color: var(--tg-theme-text-color, #222222);
+            --button-color: var(--tg-theme-button-color, #0088cc);
+            --button-text: var(--tg-theme-button-text-color, #ffffff);
+        }
+
         body {
-            background-color: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
-            font-family: sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
             margin: 0;
+            overflow: hidden;
         }
 
-        .container {
+        .player-card {
             text-align: center;
+            padding: 40px;
+            border-radius: 25px;
+            background: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.1));
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
-            margin-bottom: 20px;
-            font-size: 24px;
+            margin-bottom: 5px;
+            font-size: 22px;
+        }
+
+        .sub-title {
+            opacity: 0.6;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        /* Контейнер для кнопки с анимацией */
+        .btn-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 150px;
+            height: 150px;
         }
 
         #playBtn {
-            width: 120px;
-            height: 120px;
+            z-index: 2;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             border: none;
-            background-color: var(--tg-theme-button-color, #248bcf);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            font-size: 18px;
+            background: linear-gradient(135deg, var(--button-color), #5ac8fa);
+            color: var(--button-text);
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            transition: transform 0.1s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Анимация пульсации */
+        .pulse {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: var(--button-color);
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .playing .pulse {
+            animation: pulse-animation 2s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% {
+                transform: scale(1);
+                opacity: 0.6;
+            }
+
+            100% {
+                transform: scale(1.8);
+                opacity: 0;
+            }
         }
 
         #playBtn:active {
-            transform: scale(0.95);
+            transform: scale(0.9);
         }
 
-        .status {
-            margin-top: 15px;
-            font-size: 14px;
-            opacity: 0.7;
+        .status-tag {
+            margin-top: 30px;
+            padding: 6px 15px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.05);
+            font-size: 12px;
+            font-weight: 500;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="container">
+    <div class="player-card">
         <h1>Моя Удмуртия</h1>
-        <button id="playBtn">ИГРАТЬ</button>
-        <p class="status" id="statusText">Нажмите, чтобы слушать</p>
+        <div class="sub-title">Прямой эфир</div>
+
+        <div class="btn-container" id="container">
+            <div class="pulse"></div>
+            <button id="playBtn">ИГРАТЬ</button>
+        </div>
+
+        <div class="status-tag" id="statusText">Готов к вещанию</div>
     </div>
 
     <script>
-        // Инициализация Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
 
-        // Ссылка на поток (используем прямую ссылку)
         const streamUrl = "https://radiopotok1.ru/moya-udmurtiya?time=1767938340&type=.mp3";
-        const audio = new Audio(streamUrl);
+        let audio = new Audio(streamUrl);
         audio.crossOrigin = "anonymous";
 
         const btn = document.getElementById('playBtn');
+        const container = document.getElementById('container');
         const status = document.getElementById('statusText');
 
         btn.onclick = function () {
             if (audio.paused) {
-                status.innerText = "Загрузка потока...";
+                status.innerText = "Подключение...";
+
+                // Важно для мобильных устройств
+                audio.load();
+
                 audio.play()
                     .then(() => {
                         btn.innerText = "ПАУЗА";
-                        status.innerText = "В эфире";
+                        status.innerText = "В ЭФИРЕ";
+                        container.classList.add('playing');
                         tg.HapticFeedback.impactOccurred('medium');
                     })
                     .catch(e => {
-                        status.innerText = "Ошибка доступа";
+                        status.innerText = "Ошибка потока";
                         console.error(e);
                     });
             } else {
                 audio.pause();
                 btn.innerText = "ИГРАТЬ";
                 status.innerText = "Пауза";
+                container.classList.remove('playing');
                 tg.HapticFeedback.impactOccurred('light');
             }
+        };
+
+        // Обработка прерывания сети
+        audio.onerror = function () {
+            status.innerText = "Ошибка сети. Переподключение...";
+            container.classList.remove('playing');
         };
     </script>
 </body>
