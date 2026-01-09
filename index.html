@@ -15,8 +15,9 @@
         #playBtn {
             width: 100px; height: 100px; border-radius: 50%; border: none;
             background: #248bcf; color: #fff; font-size: 16px; font-weight: bold;
-            cursor: pointer; margin: 20px 0; outline: none;
+            cursor: pointer; margin: 20px 0; outline: none; transition: transform 0.1s;
         }
+        #playBtn:active { transform: scale(0.9); }
         #status { font-size: 12px; font-weight: bold; opacity: 0.6; text-transform: uppercase; }
         .playing { animation: pulse 1.5s infinite; }
         @keyframes pulse {
@@ -37,12 +38,11 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Ваша ссылка
-        const targetUrl = "http://radio.myudm.ru:10010/efir";
+        // Твоя ссылка
+        const rawStream = "http://radio.myudm.ru:10010/efir";
         
-        // Используем более мощный прокси-сервис для стриминга
-        // Этот прокси лучше справляется с бинарными данными
-        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(targetUrl);
+        // Используем специализированный медиа-прокси (он бесплатный и мощный)
+        const proxyStream = "https://hls.cloud/proxy?url=" + encodeURIComponent(rawStream);
         
         let audio = new Audio();
         audio.crossOrigin = "anonymous";
@@ -52,12 +52,10 @@
 
         btn.onclick = function() {
             if (audio.paused) {
-                status.innerText = "ЗАГРУЗКА...";
+                status.innerText = "СОЕДИНЕНИЕ...";
                 
-                // Переподключаем src, чтобы поток всегда был свежим
-                audio.src = proxyUrl;
-                
-                // Настройка буферизации для мобильных
+                // Принудительно ставим ссылку
+                audio.src = proxyStream;
                 audio.preload = "auto";
                 
                 audio.play()
@@ -68,12 +66,16 @@
                         tg.HapticFeedback.impactOccurred('medium');
                     })
                     .catch(e => {
-                        status.innerText = "ОШИБКА ПРОКСИ";
-                        console.error(e);
+                        // Если этот прокси не сработал, пробуем запасной вариант
+                        console.error("HLS Proxy failed, trying fallback...");
+                        audio.src = "https://cors-proxy.htmldriven.com/?url=" + encodeURIComponent(rawStream);
+                        audio.play().catch(() => {
+                            status.innerText = "ОШИБКА ДОСТУПА";
+                        });
                     });
             } else {
                 audio.pause();
-                audio.src = ""; // Важно: полностью обрываем поток
+                audio.src = ""; 
                 status.innerText = "ПАУЗА";
                 btn.innerText = "PLAY";
                 btn.classList.remove('playing');
@@ -81,7 +83,6 @@
             }
         };
 
-        // Если возникают заикания, браузер сам вызовет это событие
         audio.onwaiting = () => { status.innerText = "БУФЕРИЗАЦИЯ..."; };
         audio.onplaying = () => { status.innerText = "• В ЭФИРЕ"; };
     </script>
