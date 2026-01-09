@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Радио Моя Удмуртия</title>
+    <title>Моя Удмуртия — Радио</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --primary-color: #0088cc;
-            --bg-color: var(--tg-theme-bg-color, #f5f5f5);
+            --bg-color: var(--tg-theme-bg-color, #ffffff);
             --text-color: var(--tg-theme-text-color, #222222);
-            --button-color: var(--tg-theme-button-color, #0088cc);
+            --hint-color: var(--tg-theme-hint-color, #999999);
+            --button-color: var(--tg-theme-button-color, #248bcf);
             --button-text: var(--tg-theme-button-text-color, #ffffff);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f4);
         }
 
         body {
@@ -30,46 +30,40 @@
 
         .player-card {
             text-align: center;
-            padding: 40px;
-            border-radius: 25px;
-            background: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.1));
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 80%;
+            max-width: 300px;
+            border-radius: 30px;
+            background: var(--secondary-bg);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
         }
 
-        h1 {
-            margin-bottom: 5px;
-            font-size: 22px;
-        }
+        h1 { margin: 0 0 5px 0; font-size: 20px; }
+        .sub-title { color: var(--hint-color); margin-bottom: 30px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
 
-        .sub-title {
-            opacity: 0.6;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-
-        /* Контейнер для кнопки с анимацией */
         .btn-container {
             position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
-            width: 150px;
-            height: 150px;
+            width: 140px;
+            height: 140px;
+            margin: 0 auto;
         }
 
         #playBtn {
             z-index: 2;
-            width: 100px;
-            height: 100px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
             border: none;
-            background: linear-gradient(135deg, var(--button-color), #5ac8fa);
+            background: var(--button-color);
             color: var(--button-text);
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             outline: none;
             -webkit-tap-highlight-color: transparent;
         }
@@ -77,8 +71,8 @@
         /* Анимация пульсации */
         .pulse {
             position: absolute;
-            width: 100px;
-            height: 100px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
             background: var(--button-color);
             opacity: 0;
@@ -90,44 +84,40 @@
         }
 
         @keyframes pulse-animation {
-            0% {
-                transform: scale(1);
-                opacity: 0.6;
-            }
-
-            100% {
-                transform: scale(1.8);
-                opacity: 0;
-            }
+            0% { transform: scale(1); opacity: 0.5; }
+            100% { transform: scale(1.8); opacity: 0; }
         }
 
-        #playBtn:active {
-            transform: scale(0.9);
-        }
+        #playBtn:active { transform: scale(0.92); }
 
         .status-tag {
             margin-top: 30px;
-            padding: 6px 15px;
+            padding: 8px 20px;
             border-radius: 20px;
-            background: rgba(0, 0, 0, 0.05);
+            background: var(--bg-color);
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 600;
+            color: var(--hint-color);
+            display: inline-block;
+        }
+
+        .playing #statusText {
+            color: #2ecc71;
         }
     </style>
 </head>
-
 <body>
 
     <div class="player-card">
         <h1>Моя Удмуртия</h1>
-        <div class="sub-title">Прямой эфир</div>
+        <div class="sub-title">100.1 FM</div>
 
         <div class="btn-container" id="container">
             <div class="pulse"></div>
             <button id="playBtn">ИГРАТЬ</button>
         </div>
 
-        <div class="status-tag" id="statusText">Готов к вещанию</div>
+        <div class="status-tag" id="statusText">ГОТОВ К ЭФИРУ</div>
     </div>
 
     <script>
@@ -135,47 +125,68 @@
         tg.ready();
         tg.expand();
 
+        // Ваша ссылка через CORS прокси
         const streamUrl = "https://cors-anywhere.wcx.cloud/http://radio.myudm.ru:10010/efir";
-        let audio = new Audio(streamUrl);
+        
+        // Создаем аудио-объект с настройками буферизации
+        let audio = new Audio();
+        audio.src = streamUrl;
         audio.crossOrigin = "anonymous";
+        audio.preload = "auto";
 
         const btn = document.getElementById('playBtn');
         const container = document.getElementById('container');
         const status = document.getElementById('statusText');
 
-        btn.onclick = function () {
+        // Флаг для предотвращения множественных нажатий во время загрузки
+        let isConnecting = false;
+
+        btn.onclick = function() {
+            if (isConnecting) return;
+
             if (audio.paused) {
-                status.innerText = "Подключение...";
-
-                // Важно для мобильных устройств
+                isConnecting = true;
+                status.innerText = "ПОДКЛЮЧЕНИЕ...";
+                btn.style.opacity = "0.7";
+                
+                // Для стабильности на Android переподключаем поток перед игрой
                 audio.load();
-
+                
                 audio.play()
                     .then(() => {
+                        isConnecting = false;
+                        btn.style.opacity = "1";
                         btn.innerText = "ПАУЗА";
-                        status.innerText = "В ЭФИРЕ";
+                        status.innerText = "• В ЭФИРЕ";
                         container.classList.add('playing');
                         tg.HapticFeedback.impactOccurred('medium');
                     })
                     .catch(e => {
-                        status.innerText = "Ошибка потока";
-                        console.error(e);
+                        isConnecting = false;
+                        btn.style.opacity = "1";
+                        status.innerText = "ОШИБКА СЕТИ";
+                        console.error("Playback error:", e);
                     });
             } else {
                 audio.pause();
+                // Сбрасываем аудио, чтобы при следующем запуске поток был живой, а не из кэша
+                audio.src = "";
+                audio.src = streamUrl;
+                
                 btn.innerText = "ИГРАТЬ";
-                status.innerText = "Пауза";
+                status.innerText = "ПАУЗА";
                 container.classList.remove('playing');
                 tg.HapticFeedback.impactOccurred('light');
             }
         };
 
-        // Обработка прерывания сети
-        audio.onerror = function () {
-            status.innerText = "Ошибка сети. Переподключение...";
+        // Обработка критических ошибок потока
+        audio.onerror = function() {
+            status.innerText = "ОШИБКА ПОТОКА";
             container.classList.remove('playing');
+            btn.innerText = "ИГРАТЬ";
+            isConnecting = false;
         };
     </script>
 </body>
-
 </html>
