@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Радио Моя Удмуртия</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        #playBtn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background-color: var(--tg-theme-button-color, #248bcf);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s;
+        }
+
+        #playBtn:active {
+            transform: scale(0.95);
+        }
+
+        .status {
+            margin-top: 15px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Моя Удмуртия</h1>
+        <button id="playBtn">ИГРАТЬ</button>
+        <p class="status" id="statusText">Нажмите, чтобы слушать</p>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Ссылка на поток (используем прямую ссылку)
+        const streamUrl = "https://radiopotok1.ru/moya-udmurtiya?time=1767938340&type=.mp3";
+        const audio = new Audio(streamUrl);
+        audio.crossOrigin = "anonymous";
+
+        const btn = document.getElementById('playBtn');
+        const status = document.getElementById('statusText');
+
+        btn.onclick = function () {
+            if (audio.paused) {
+                status.innerText = "Загрузка потока...";
+                audio.play()
+                    .then(() => {
+                        btn.innerText = "ПАУЗА";
+                        status.innerText = "В эфире";
+                        tg.HapticFeedback.impactOccurred('medium');
+                    })
+                    .catch(e => {
+                        status.innerText = "Ошибка доступа";
+                        console.error(e);
+                    });
+            } else {
+                audio.pause();
+                btn.innerText = "ИГРАТЬ";
+                status.innerText = "Пауза";
+                tg.HapticFeedback.impactOccurred('light');
+            }
+        };
+    </script>
+</body>
+
+</html>
